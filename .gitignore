@@ -1,0 +1,6 @@
+.DS_Store
+.build_cache/
+build/
+dist/*/
+dist/*.zip
+*.xcuserstate

@@ -101,7 +101,7 @@ Generated builds and release archives are intentionally excluded from Git.
 
 [**PlutaB**](https://github.com/PlutaB)
 
-Adapted from [**BowenZZZZZZZ/codex-quota-menubar**](https://github.com/BowenZZZZZZZ/codex-quota-menubar)
+Adapted from [BowenZZZZZZZ/codex-quota-menubar](https://github.com/BowenZZZZZZZ/codex-quota-menubar)
 
 ## License
 

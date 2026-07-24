@@ -304,12 +304,13 @@ final class CodexQuotaReader {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: 52)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: 70)
     private let reader = CodexQuotaReader()
     private let loginItem = LoginItemManager()
     private var timer: Timer?
     private var lastResult: QuotaReadResult = .missing("Not loaded yet.")
     private let loginItemEnabledKey = "loginItemEnabled"
+    private lazy var codexLogo = loadCodexLogo()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -457,15 +458,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             makeStatusRow(for: snapshot.secondary)
         ]
 
-        let size = NSSize(width: 52, height: 24)
+        let size = NSSize(width: 70, height: 24)
         let image = NSImage(size: size)
         image.lockFocus()
 
         NSColor.clear.setFill()
         NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
 
-        let barX: CGFloat = 0
-        let barWidth: CGFloat = 52
+        codexLogo.draw(in: NSRect(x: 0, y: 3.5, width: 15, height: 15))
+
+        let barX: CGFloat = 20
+        let barWidth: CGFloat = 50
         let rowHeight: CGFloat = 8
         let topY: CGFloat = 13
         let bottomY: CGFloat = 1.5
@@ -479,15 +482,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func placeholderStatusImage() -> NSImage {
-        let size = NSSize(width: 52, height: 24)
+        let size = NSSize(width: 70, height: 24)
         let image = NSImage(size: size)
         image.lockFocus()
+        codexLogo.draw(in: NSRect(x: 0, y: 3.5, width: 15, height: 15))
         let text = "--"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.secondaryLabelColor
         ]
-        text.draw(at: NSPoint(x: 2, y: 6), withAttributes: attributes)
+        text.draw(at: NSPoint(x: 16, y: 6), withAttributes: attributes)
         image.unlockFocus()
         image.isTemplate = false
         return image
@@ -584,6 +588,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             text.draw(at: origin)
             context.restoreGState()
         }
+    }
+
+    private func loadCodexLogo() -> NSImage {
+        if let bundledPath = Bundle.main.path(forResource: "codex", ofType: "png"),
+           let image = NSImage(contentsOfFile: bundledPath) {
+            return image
+        }
+
+        let fallbackPath = URL(fileURLWithPath: CommandLine.arguments[0])
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("codex.png")
+            .path
+        return NSImage(contentsOfFile: fallbackPath) ?? NSImage(size: .zero)
     }
 
     private func color(forRemaining remainingPercent: Double) -> NSColor {

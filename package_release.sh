@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0"
+VERSION="2.0.0"
 APP_DIR="$("$SCRIPT_DIR/build.sh")"
 DIST_DIR="$SCRIPT_DIR/dist"
 PACKAGE_DIR="$DIST_DIR/CodexQuotaMenuBar-$VERSION"

@@ -6,10 +6,13 @@ APP_NAME="CodexQuotaMenuBar"
 APP_DIR="$SCRIPT_DIR/build/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 mkdir -p "$MACOS_DIR"
+mkdir -p "$RESOURCES_DIR"
 mkdir -p "$SCRIPT_DIR/.build_cache"
 cp "$SCRIPT_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$SCRIPT_DIR/codex.png" "$RESOURCES_DIR/codex.png"
 
 swiftc \
   -O \

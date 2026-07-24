@@ -29,6 +29,7 @@ struct QuotaSnapshot {
 struct StatusRow {
     let percentText: String
     let rightText: String
+    let fillPercent: Double
     let remainingPercent: Double
 }
 
@@ -147,10 +148,28 @@ final class CodexQuotaReader {
             return .missing("No Codex session logs found.")
         }
 
+        var bestSnapshot: QuotaSnapshot?
+
         for file in files.prefix(maxFilesToScan) {
             if let snapshot = latestSnapshot(in: file.url) {
-                return .snapshot(snapshot)
+                guard let observedAt = snapshot.observedAt else {
+                    bestSnapshot = bestSnapshot ?? snapshot
+                    continue
+                }
+
+                if let currentBest = bestSnapshot {
+                    let bestDate = currentBest.observedAt ?? .distantPast
+                    if observedAt > bestDate {
+                        bestSnapshot = snapshot
+                    }
+                } else {
+                    bestSnapshot = snapshot
+                }
             }
+        }
+
+        if let bestSnapshot {
+            return .snapshot(bestSnapshot)
         }
 
         return .missing("No rate limit event found in recent Codex logs.")
@@ -202,7 +221,7 @@ final class CodexQuotaReader {
                 let limits = payload["rate_limits"] as? [String: Any]
             else { continue }
 
-            return QuotaSnapshot(
+            let snapshot = QuotaSnapshot(
                 observedAt: parseDate(object["timestamp"] as? String),
                 sourcePath: url.path,
                 primary: parseWindow(limits["primary"]),
@@ -211,6 +230,10 @@ final class CodexQuotaReader {
                 limitId: stringValue(limits["limit_id"]),
                 reachedType: stringValue(limits["rate_limit_reached_type"])
             )
+
+            if snapshot.primary != nil || snapshot.secondary != nil {
+                return snapshot
+            }
         }
 
         return nil
@@ -234,9 +257,11 @@ final class CodexQuotaReader {
     private func parseWindow(_ value: Any?) -> LimitWindow? {
         guard let dict = value as? [String: Any] else { return nil }
         guard let used = doubleValue(dict["used_percent"]) else { return nil }
+        let windowMinutes = intValue(dict["window_minutes"])
+        guard let windowMinutes, windowMinutes > 0 else { return nil }
         return LimitWindow(
             usedPercent: used,
-            windowMinutes: intValue(dict["window_minutes"]),
+            windowMinutes: windowMinutes,
             resetsAt: unixDate(dict["resets_at"])
         )
     }
@@ -439,8 +464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSColor.clear.setFill()
         NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
 
-        let barX: CGFloat = 2
-        let barWidth: CGFloat = 48
+        let barX: CGFloat = 0
+        let barWidth: CGFloat = 52
         let rowHeight: CGFloat = 8
         let topY: CGFloat = 13
         let bottomY: CGFloat = 1.5
@@ -470,7 +495,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeStatusRow(for window: LimitWindow?) -> StatusRow {
         guard let window else {
-            return StatusRow(percentText: "--", rightText: "--", remainingPercent: 0)
+            return StatusRow(percentText: "--", rightText: "--", fillPercent: 0, remainingPercent: 0)
         }
 
         let percent = Int(window.remainingPercent.rounded())
@@ -481,8 +506,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rightText = "--"
         }
         return StatusRow(
-            percentText: "\(percent)",
+            percentText: "\(percent)%",
             rightText: rightText,
+            fillPercent: window.remainingPercent,
             remainingPercent: window.remainingPercent
         )
     }
@@ -493,7 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSColor(calibratedWhite: 0.0, alpha: 0.42).setFill()
         backgroundPath.fill()
 
-        let fillWidth = max(0, min(barWidth, barWidth * CGFloat(row.remainingPercent / 100)))
+        let fillWidth = max(0, min(barWidth, barWidth * CGFloat(row.fillPercent / 100)))
         let fillRect = NSRect(x: barX, y: y, width: fillWidth, height: rowHeight)
         if fillWidth > 0 {
             let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 3, yRadius: 3)
@@ -502,39 +528,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let leftAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold),
-            .foregroundColor: NSColor(calibratedWhite: 0.5, alpha: 1.0)
+            .font: NSFont.systemFont(ofSize: 7.5, weight: .bold),
+            .foregroundColor: NSColor(calibratedWhite: 0.5, alpha: 1.0),
+            .kern: -0.2
         ]
         let rightAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .medium),
-            .foregroundColor: NSColor(calibratedWhite: 0.5, alpha: 1.0)
+            .font: NSFont.systemFont(ofSize: 7.5, weight: .medium),
+            .foregroundColor: NSColor(calibratedWhite: 0.5, alpha: 1.0),
+            .kern: -0.2
         ]
 
-        let leftSize = row.percentText.size(withAttributes: leftAttributes)
-        let rightSize = row.rightText.size(withAttributes: rightAttributes)
-        let textY = y + ((rowHeight - leftSize.height) / 2) - 0.5
-        let leftOrigin = NSPoint(x: barX + 1.5, y: textY)
-        let rightOrigin = NSPoint(x: barX + barWidth - rightSize.width - 1.5, y: y + ((rowHeight - rightSize.height) / 2) - 0.5)
+        let leftText = NSAttributedString(string: row.percentText, attributes: leftAttributes)
+        let rightText = NSAttributedString(string: row.rightText, attributes: rightAttributes)
+        let leftSize = leftText.size()
+        let rightSize = rightText.size()
+        let leftTextY = y + ((rowHeight - leftSize.height) / 2) - 0.5
+        let rightTextY = y + ((rowHeight - rightSize.height) / 2) - 0.5
+        let leftOrigin = NSPoint(x: barX + 0.25, y: leftTextY)
+        let rightOrigin = NSPoint(x: barX + barWidth - rightSize.width - 0.25, y: rightTextY)
 
-        drawText(row.percentText, at: leftOrigin, attributes: leftAttributes, fillRect: fillRect, barRect: barRect)
-        drawText(row.rightText, at: rightOrigin, attributes: rightAttributes, fillRect: fillRect, barRect: barRect)
+        drawText(leftText, at: leftOrigin, fillRect: fillRect, barRect: barRect)
+        drawText(rightText, at: rightOrigin, fillRect: fillRect, barRect: barRect)
     }
 
     private func drawText(
-        _ text: String,
+        _ text: NSAttributedString,
         at origin: NSPoint,
-        attributes: [NSAttributedString.Key: Any],
         fillRect: NSRect,
         barRect: NSRect
     ) {
-        let textSize = text.size(withAttributes: attributes)
+        let textSize = text.size()
         let textRect = NSRect(origin: origin, size: textSize)
 
         if let context = NSGraphicsContext.current?.cgContext, fillRect.width > 0 {
             context.saveGState()
             context.clip(to: fillRect)
             NSGraphicsContext.current?.compositingOperation = .clear
-            text.draw(at: origin, withAttributes: attributes)
+            text.draw(at: origin)
             NSGraphicsContext.current?.compositingOperation = .sourceOver
             context.restoreGState()
         }
@@ -551,7 +581,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let context = NSGraphicsContext.current?.cgContext {
             context.saveGState()
             context.clip(to: remainingRect)
-            text.draw(at: origin, withAttributes: attributes)
+            text.draw(at: origin)
             context.restoreGState()
         }
     }
@@ -583,8 +613,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let days = seconds / 86_400
         let hours = (seconds % 86_400) / 3_600
         let minutes = (seconds % 3_600) / 60
-        if days > 0 { return "\(days)d \(hours)h" }
-        if hours > 0 { return "\(hours)h \(minutes)m" }
+        if days > 0 { return "\(days)d\(hours)h" }
+        if hours > 0 { return "\(hours)h\(minutes)m" }
         return "\(max(1, minutes))m"
     }
 

@@ -1,11 +1,13 @@
 # Codex Quota Menu Bar
 
 A small, native macOS menu bar app that shows the remaining quota reported by
-local Codex session logs. Current release: **v1.0**.
+local Codex session logs. Current release: **v1.1**.
 
 Two compact color-coded bars show the remaining 5-hour and 7-day quota together
 with their reset times. Open the menu for full details, manual refresh, and the
 start-at-login setting.
+
+![Codex Quota Menu Bar showing the 5-hour and 7-day quota bars](Codex-menu-bar.png)
 
 ## Privacy
 
@@ -90,7 +92,7 @@ This removes the LaunchAgent but leaves the app itself in place.
 The distributable zip is written to:
 
 ```text
-dist/CodexQuotaMenuBar-1.0.0-macOS.zip
+dist/CodexQuotaMenuBar-1.1.0-macOS.zip
 ```
 
 Generated builds and release archives are intentionally excluded from Git.

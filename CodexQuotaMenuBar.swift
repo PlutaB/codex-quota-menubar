@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 struct LimitWindow {
+    let key: String
     let usedPercent: Double
     let windowMinutes: Int?
     let resetsAt: Date?
@@ -9,21 +10,49 @@ struct LimitWindow {
     var remainingPercent: Double {
         max(0, min(100, 100 - usedPercent))
     }
+
+    var label: String {
+        guard let windowMinutes else { return key }
+        switch windowMinutes {
+        case 300:
+            return "5-hour usage"
+        case 1_440:
+            return "1-day usage"
+        case 10_080:
+            return "7-day usage"
+        case 43_200...44_640:
+            return "30-day usage"
+        default:
+            if windowMinutes % 1_440 == 0 {
+                return "\(windowMinutes / 1_440)-day usage"
+            }
+            if windowMinutes % 60 == 0 {
+                return "\(windowMinutes / 60)-hour usage"
+            }
+            return "\(windowMinutes)-minute usage"
+        }
+    }
+
+    var identifier: String {
+        "\(key):\(windowMinutes ?? -1)"
+    }
 }
 
 struct QuotaSnapshot {
     let observedAt: Date?
     let sourcePath: String
-    let primary: LimitWindow?
-    let secondary: LimitWindow?
+    let windows: [LimitWindow]
     let planType: String?
     let limitId: String?
     let reachedType: String?
 
     var title: String {
-        guard let primary else { return "Codex --" }
-        return "Codex \(Int(primary.remainingPercent.rounded()))%"
+        guard let firstWindow = windows.first else {
+            return reachedType == nil ? "Codex --" : "Codex cap"
+        }
+        return "Codex \(Int(firstWindow.remainingPercent.rounded()))%"
     }
+
 }
 
 struct StatusRow {
@@ -224,14 +253,13 @@ final class CodexQuotaReader {
             let snapshot = QuotaSnapshot(
                 observedAt: parseDate(object["timestamp"] as? String),
                 sourcePath: url.path,
-                primary: parseWindow(limits["primary"]),
-                secondary: parseWindow(limits["secondary"]),
+                windows: parseWindows(limits),
                 planType: stringValue(limits["plan_type"]),
                 limitId: stringValue(limits["limit_id"]),
                 reachedType: stringValue(limits["rate_limit_reached_type"])
             )
 
-            if snapshot.primary != nil || snapshot.secondary != nil {
+            if !snapshot.windows.isEmpty || snapshot.reachedType != nil {
                 return snapshot
             }
         }
@@ -254,12 +282,27 @@ final class CodexQuotaReader {
         }
     }
 
-    private func parseWindow(_ value: Any?) -> LimitWindow? {
+    private func parseWindows(_ limits: [String: Any]) -> [LimitWindow] {
+        let windows = limits.compactMap { key, value in
+            parseWindow(key: key, value: value)
+        }
+        return windows.sorted { lhs, rhs in
+            let lhsMinutes = lhs.windowMinutes ?? Int.max
+            let rhsMinutes = rhs.windowMinutes ?? Int.max
+            if lhsMinutes == rhsMinutes {
+                return lhs.key < rhs.key
+            }
+            return lhsMinutes < rhsMinutes
+        }
+    }
+
+    private func parseWindow(key: String, value: Any?) -> LimitWindow? {
         guard let dict = value as? [String: Any] else { return nil }
         guard let used = doubleValue(dict["used_percent"]) else { return nil }
         let windowMinutes = intValue(dict["window_minutes"])
         guard let windowMinutes, windowMinutes > 0 else { return nil }
         return LimitWindow(
+            key: key,
             usedPercent: used,
             windowMinutes: windowMinutes,
             resetsAt: unixDate(dict["resets_at"])
@@ -310,6 +353,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var lastResult: QuotaReadResult = .missing("Not loaded yet.")
     private let loginItemEnabledKey = "loginItemEnabled"
+    private let selectedWindowIDsKey = "selectedWindowIDs"
     private lazy var codexLogo = loadCodexLogo()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -351,6 +395,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
     }
 
+    @objc private func toggleDisplayedWindow(_ sender: Any?) {
+        guard
+            let item = sender as? NSMenuItem,
+            let identifier = item.representedObject as? String
+        else { return }
+
+        let defaults = UserDefaults.standard
+        var selected = Set(defaults.stringArray(forKey: selectedWindowIDsKey) ?? [])
+        if selected.contains(identifier) {
+            selected.remove(identifier)
+        } else {
+            selected.insert(identifier)
+        }
+        defaults.set(Array(selected), forKey: selectedWindowIDsKey)
+        refresh()
+    }
+
     @objc private func quit(_ sender: Any?) {
         NSApp.terminate(nil)
     }
@@ -370,9 +431,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastResult = reader.loadLatest()
         switch lastResult {
         case .snapshot(let snapshot):
-            statusItem.button?.image = statusImage(for: snapshot)
-            statusItem.button?.toolTip = tooltip(for: snapshot)
+            let visible = visibleWindows(for: snapshot)
+            if snapshot.windows.isEmpty {
+                statusItem.length = 34
+                statusItem.button?.image = placeholderStatusImage(text: "cap")
+                statusItem.button?.toolTip = tooltip(for: snapshot)
+            } else {
+                statusItem.length = visible.isEmpty ? 18 : 70
+                statusItem.button?.image = statusImage(for: snapshot)
+                statusItem.button?.toolTip = tooltip(for: snapshot)
+            }
         case .missing:
+            statusItem.length = 70
             statusItem.button?.image = placeholderStatusImage()
             statusItem.button?.toolTip = "No Codex quota event found yet"
         }
@@ -393,19 +463,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             menu.addItem(.separator())
 
-            if let primary = snapshot.primary {
-                menu.addItem(disabled("5h: \(format(window: primary))"))
-                if let reset = primary.resetsAt {
-                    menu.addItem(disabled("5h refill: \(format(date: reset))"))
+            if snapshot.windows.isEmpty, let reached = snapshot.reachedType {
+                menu.addItem(disabled("State: \(reached)"))
+            } else {
+                for window in snapshot.windows {
+                    menu.addItem(disabled("\(window.label): \(format(window: window))"))
+                    if let reset = window.resetsAt {
+                        menu.addItem(disabled("\(window.label) refill: \(format(date: reset))"))
+                    }
                 }
-            }
-            if let secondary = snapshot.secondary {
-                menu.addItem(disabled("7d: \(format(window: secondary))"))
             }
             if let observed = snapshot.observedAt {
                 menu.addItem(disabled("Updated: \(format(date: observed))"))
             }
             menu.addItem(disabled("Source: \(URL(fileURLWithPath: snapshot.sourcePath).lastPathComponent)"))
+
+            if !snapshot.windows.isEmpty {
+                menu.addItem(.separator())
+                menu.addItem(disabled("Displayed windows"))
+                let selected = selectedWindowIDs()
+                for window in snapshot.windows {
+                    let item = action(window.label, #selector(toggleDisplayedWindow(_:)))
+                    item.representedObject = window.identifier
+                    item.state = selected?.contains(window.identifier) ?? true ? .on : .off
+                    menu.addItem(item)
+                }
+            }
 
         case .missing(let message):
             menu.addItem(disabled("Codex quota"))
@@ -443,20 +526,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func tooltip(for snapshot: QuotaSnapshot) -> String {
         var parts: [String] = []
-        if let primary = snapshot.primary {
-            parts.append("5h \(Int(primary.remainingPercent.rounded()))% left")
+        for window in visibleWindows(for: snapshot) {
+            parts.append("\(window.label) \(Int(window.remainingPercent.rounded()))% left")
         }
-        if let secondary = snapshot.secondary {
-            parts.append("7d \(Int(secondary.remainingPercent.rounded()))% left")
+        if parts.isEmpty, let reached = snapshot.reachedType {
+            parts.append(reached)
         }
         return parts.joined(separator: " / ")
     }
 
     private func statusImage(for snapshot: QuotaSnapshot) -> NSImage {
-        let rows = [
-            makeStatusRow(for: snapshot.primary),
-            makeStatusRow(for: snapshot.secondary)
-        ]
+        let visibleWindows = visibleWindows(for: snapshot)
+        if visibleWindows.isEmpty {
+            return iconOnlyStatusImage()
+        }
 
         let size = NSSize(width: 70, height: 24)
         let image = NSImage(size: size)
@@ -469,24 +552,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let barX: CGFloat = 20
         let barWidth: CGFloat = 50
-        let rowHeight: CGFloat = 8
-        let topY: CGFloat = 13
-        let bottomY: CGFloat = 1.5
-
-        draw(row: rows[0], y: topY, barX: barX, barWidth: barWidth, rowHeight: rowHeight)
-        draw(row: rows[1], y: bottomY, barX: barX, barWidth: barWidth, rowHeight: rowHeight)
+        if visibleWindows.count == 1 {
+            draw(
+                row: makeStatusRow(for: visibleWindows.first),
+                y: 6,
+                barX: barX,
+                barWidth: barWidth,
+                rowHeight: 10,
+                cornerRadius: 5
+            )
+        } else {
+            let rows = [
+                makeStatusRow(for: visibleWindows.first),
+                makeStatusRow(for: visibleWindows[1])
+            ]
+            let rowHeight: CGFloat = 8
+            let topY: CGFloat = 13
+            let bottomY: CGFloat = 1.5
+            draw(row: rows[0], y: topY, barX: barX, barWidth: barWidth, rowHeight: rowHeight, cornerRadius: 3)
+            draw(row: rows[1], y: bottomY, barX: barX, barWidth: barWidth, rowHeight: rowHeight, cornerRadius: 3)
+        }
 
         image.unlockFocus()
         image.isTemplate = false
         return image
     }
 
-    private func placeholderStatusImage() -> NSImage {
+    private func iconOnlyStatusImage() -> NSImage {
+        let size = NSSize(width: 18, height: 24)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.clear.setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+        codexLogo.draw(in: NSRect(x: 0, y: 3.5, width: 15, height: 15))
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    private func placeholderStatusImage(text: String = "--") -> NSImage {
         let size = NSSize(width: 70, height: 24)
         let image = NSImage(size: size)
         image.lockFocus()
         codexLogo.draw(in: NSRect(x: 0, y: 3.5, width: 15, height: 15))
-        let text = "--"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.secondaryLabelColor
@@ -495,6 +603,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         image.unlockFocus()
         image.isTemplate = false
         return image
+    }
+
+    private func selectedWindowIDs() -> Set<String>? {
+        guard UserDefaults.standard.object(forKey: selectedWindowIDsKey) != nil else {
+            return nil
+        }
+        return Set(UserDefaults.standard.stringArray(forKey: selectedWindowIDsKey) ?? [])
+    }
+
+    private func visibleWindows(for snapshot: QuotaSnapshot) -> [LimitWindow] {
+        guard let selected = selectedWindowIDs() else {
+            return Array(snapshot.windows.prefix(2))
+        }
+        let filtered = snapshot.windows.filter { selected.contains($0.identifier) }
+        return Array(filtered.prefix(2))
     }
 
     private func makeStatusRow(for window: LimitWindow?) -> StatusRow {
@@ -517,16 +640,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func draw(row: StatusRow, y: CGFloat, barX: CGFloat, barWidth: CGFloat, rowHeight: CGFloat) {
+    private func draw(row: StatusRow, y: CGFloat, barX: CGFloat, barWidth: CGFloat, rowHeight: CGFloat, cornerRadius: CGFloat) {
         let barRect = NSRect(x: barX, y: y, width: barWidth, height: rowHeight)
-        let backgroundPath = NSBezierPath(roundedRect: barRect, xRadius: 3, yRadius: 3)
+        let backgroundPath = NSBezierPath(roundedRect: barRect, xRadius: cornerRadius, yRadius: cornerRadius)
         NSColor(calibratedWhite: 0.0, alpha: 0.42).setFill()
         backgroundPath.fill()
 
         let fillWidth = max(0, min(barWidth, barWidth * CGFloat(row.fillPercent / 100)))
         let fillRect = NSRect(x: barX, y: y, width: fillWidth, height: rowHeight)
         if fillWidth > 0 {
-            let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 3, yRadius: 3)
+            let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: cornerRadius, yRadius: cornerRadius)
             color(forRemaining: row.remainingPercent).setFill()
             fillPath.fill()
         }
@@ -652,17 +775,17 @@ func renderOnce(_ result: QuotaReadResult) -> String {
         return "Codex --\n\(message)"
     case .snapshot(let snapshot):
         var lines = [snapshot.title]
-        if let primary = snapshot.primary {
-            lines.append("5h: \(Int(primary.usedPercent.rounded()))% used / \(Int(primary.remainingPercent.rounded()))% left")
-            if let reset = primary.resetsAt {
+        for window in snapshot.windows {
+            lines.append("\(window.label): \(Int(window.usedPercent.rounded()))% used / \(Int(window.remainingPercent.rounded()))% left")
+            if let reset = window.resetsAt {
                 let formatter = DateFormatter()
                 formatter.dateStyle = .short
                 formatter.timeStyle = .medium
-                lines.append("5h refill: \(formatter.string(from: reset))")
+                lines.append("\(window.label) refill: \(formatter.string(from: reset))")
             }
         }
-        if let secondary = snapshot.secondary {
-            lines.append("7d: \(Int(secondary.usedPercent.rounded()))% used / \(Int(secondary.remainingPercent.rounded()))% left")
+        if snapshot.windows.isEmpty, let reached = snapshot.reachedType {
+            lines.append("State: \(reached)")
         }
         if let plan = snapshot.planType {
             lines.append("Plan: \(plan)")

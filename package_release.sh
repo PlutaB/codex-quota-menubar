@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="2.0.0"
+VERSION="3.0.0"
 APP_DIR="$("$SCRIPT_DIR/build.sh")"
 DIST_DIR="$SCRIPT_DIR/dist"
 PACKAGE_DIR="$DIST_DIR/CodexQuotaMenuBar-$VERSION"
@@ -18,7 +18,9 @@ Codex Quota Menu Bar
 Install:
 1. Move CodexQuotaMenuBar.app to Applications, or any stable folder.
 2. Double-click the app.
-3. Look for the two quota bars in the macOS menu bar.
+3. Look for the quota indicator in the macOS menu bar.
+
+Use "Displayed windows" in the menu to choose which quota windows appear in the indicator (up to two).
 
 The app reads local Codex session logs from ~/.codex and does not use the network or an API key.
 

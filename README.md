@@ -1,14 +1,23 @@
 # Codex Quota Menu Bar
 
 A small, native macOS menu bar app that shows the remaining quota reported by
-local Codex session logs. Current release: **v3.0**.
+local Codex session logs. Current release: **v3.1**.
 
 The Codex icon and compact color-coded bars show the remaining quota for the
 available usage windows together with their reset times. Open the menu to choose
 up to two displayed windows, view full details, refresh manually, or change the
 start-at-login setting.
 
-![Codex Quota Menu Bar showing the Codex icon and quota bars](Codex_menubar_screeshot.png)
+## Display modes
+
+Use **Displayed windows** in the app menu to choose which quota progress bars
+appear in the menu bar. The indicator adapts automatically: select no window for
+the Codex icon only, one window for a single progress bar, or two windows for a
+compact two-row view.
+
+| Icon only | Single progress bar | Two progress bars |
+| --- | --- | --- |
+| ![Codex icon-only display](Codex_menubar_logo.png) | ![Codex single progress-bar display](Codex_menubar_single.png) | ![Codex two progress-bar display](Codex_menubar_double.png) |
 
 ## Privacy
 
@@ -93,7 +102,7 @@ This removes the LaunchAgent but leaves the app itself in place.
 The distributable zip is written to:
 
 ```text
-dist/CodexQuotaMenuBar-3.0.0-macOS.zip
+dist/CodexQuotaMenuBar-3.1.0-macOS.zip
 ```
 
 Generated builds and release archives are intentionally excluded from Git.

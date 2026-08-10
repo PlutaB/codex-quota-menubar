@@ -352,6 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let loginItem = LoginItemManager()
     private var timer: Timer?
     private var lastResult: QuotaReadResult = .missing("Not loaded yet.")
+    private var lastRefreshAt: Date?
     private let loginItemEnabledKey = "loginItemEnabled"
     private let selectedWindowIDsKey = "selectedWindowIDs"
     private lazy var codexLogo = loadCodexLogo()
@@ -365,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
         refresh()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         if let timer {
@@ -428,6 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
+        lastRefreshAt = Date()
         lastResult = reader.loadLatest()
         switch lastResult {
         case .snapshot(let snapshot):
@@ -446,6 +448,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.image = placeholderStatusImage()
             statusItem.button?.toolTip = "No Codex quota event found yet"
         }
+        statusItem.button?.needsDisplay = true
+        statusItem.button?.displayIfNeeded()
         rebuildMenu()
     }
 
@@ -474,7 +478,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             if let observed = snapshot.observedAt {
-                menu.addItem(disabled("Updated: \(format(date: observed))"))
+                menu.addItem(disabled("Quota updated: \(format(date: observed))"))
+            }
+            if let lastRefreshAt {
+                menu.addItem(disabled("Checked: \(format(date: lastRefreshAt))"))
             }
             menu.addItem(disabled("Source: \(URL(fileURLWithPath: snapshot.sourcePath).lastPathComponent)"))
 
@@ -494,6 +501,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(disabled("Codex quota"))
             menu.addItem(.separator())
             menu.addItem(disabled(message))
+            if let lastRefreshAt {
+                menu.addItem(disabled("Checked: \(format(date: lastRefreshAt))"))
+            }
         }
 
         menu.addItem(.separator())

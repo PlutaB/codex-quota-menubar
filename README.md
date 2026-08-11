@@ -37,7 +37,7 @@ Adapted from [BowenZZZZZZZ/codex-quota-menubar](https://github.com/BowenZZZZZZZ/
 
 ## License
 
-Copyright 漏 2026 PlutaB.
+Copyright © 2026 PlutaB.
 
 Licensed under the [MIT License](https://github.com/PlutaB/codex-quota-menubar/blob/main/LICENSE).
 

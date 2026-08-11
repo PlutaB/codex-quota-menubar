@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$("$SCRIPT_DIR/build.sh")"
 BIN_PATH="$APP_DIR/Contents/MacOS/CodexQuotaMenuBar"
-PLIST="$HOME/Library/LaunchAgents/com.bowen.codex-quota-menubar.plist"
+PLIST="$HOME/Library/LaunchAgents/com.plutab.codex-quota-menubar.plist"
 
 mkdir -p "$HOME/Library/LaunchAgents"
 
@@ -15,7 +15,7 @@ cat > "$PLIST" <<PLIST
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.bowen.codex-quota-menubar</string>
+  <string>com.plutab.codex-quota-menubar</string>
   <key>ProgramArguments</key>
   <array>
     <string>$BIN_PATH</string>
@@ -30,6 +30,7 @@ PLIST
 
 launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
-launchctl kickstart -k "gui/$(id -u)/com.bowen.codex-quota-menubar"
+launchctl kickstart -k "gui/$(id -u)/com.plutab.codex-quota-menubar"
 
 echo "Installed LaunchAgent: $PLIST"
+

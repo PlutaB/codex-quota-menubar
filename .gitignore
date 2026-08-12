@@ -3,6 +3,4 @@
 build/
 dist/*/
 dist/*.zip
-windows/dist/
 *.xcuserstate
-

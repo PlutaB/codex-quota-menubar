@@ -8,6 +8,8 @@ available usage windows together with their reset times. Open the menu to choose
 up to two displayed windows, view full details, refresh manually, or change the
 start-at-login setting.
 
+For the Windows version, see [PlutaB/codex-quota-tray](https://github.com/PlutaB/codex-quota-tray).
+
 ## Display modes
 
 Use **Displayed windows** in the app menu to choose which quota progress bars
@@ -17,7 +19,7 @@ compact two-row view.
 
 | Icon only | Single progress bar | Two progress bars |
 | --- | --- | --- |
-| ![Codex icon-only display](Codex_menubar_logo.png) | ![Codex single progress-bar display](Codex_menubar_single.png) | ![Codex two progress-bar display](Codex_menubar_double.png) |
+| ![Codex icon-only display](screenshots/Codex_menubar_logo.png) | ![Codex single progress-bar display](screenshots/Codex_menubar_single.png) | ![Codex two progress-bar display](screenshots/Codex_menubar_double.png) |
 
 ## Privacy
 

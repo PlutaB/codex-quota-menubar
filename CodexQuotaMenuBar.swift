@@ -351,6 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let reader = CodexQuotaReader()
     private let loginItem = LoginItemManager()
     private var timer: Timer?
+    private var resetTimer: Timer?
     private var lastResult: QuotaReadResult = .missing("Not loaded yet.")
     private var lastRefreshAt: Date?
     private let loginItemEnabledKey = "loginItemEnabled"
@@ -433,6 +434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastResult = reader.loadLatest()
         switch lastResult {
         case .snapshot(let snapshot):
+            scheduleResetRefresh(for: snapshot)
             let visible = visibleWindows(for: snapshot)
             if snapshot.windows.isEmpty {
                 statusItem.length = 34
@@ -444,6 +446,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 statusItem.button?.toolTip = tooltip(for: snapshot)
             }
         case .missing:
+            invalidateResetTimer()
             statusItem.length = 70
             statusItem.button?.image = placeholderStatusImage()
             statusItem.button?.toolTip = "No Codex quota event found yet"
@@ -514,6 +517,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(action("Quit", #selector(quit(_:))))
 
         statusItem.menu = menu
+    }
+
+    private func scheduleResetRefresh(for snapshot: QuotaSnapshot) {
+        let upcomingResets = snapshot.windows.compactMap(\.resetsAt).filter { $0.timeIntervalSinceNow > 0.5 }
+        guard let nextReset = upcomingResets.min() else {
+            invalidateResetTimer()
+            return
+        }
+
+        let fireInterval = max(0.5, nextReset.timeIntervalSinceNow + 0.25)
+
+        if let existing = resetTimer,
+           let existingFireDate = existing.fireDate as Date?,
+           abs(existingFireDate.timeIntervalSince(nextReset)) < 0.5 {
+            return
+        }
+
+        invalidateResetTimer()
+        let timer = Timer(fire: Date(timeIntervalSinceNow: fireInterval), interval: 0, repeats: false) { [weak self] _ in
+            self?.refresh()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        resetTimer = timer
+    }
+
+    private func invalidateResetTimer() {
+        resetTimer?.invalidate()
+        resetTimer = nil
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
@@ -776,6 +807,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         formatter.dateStyle = .short
         formatter.timeStyle = .medium
         return formatter.string(from: date)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        timer?.invalidate()
+        invalidateResetTimer()
     }
 }
 

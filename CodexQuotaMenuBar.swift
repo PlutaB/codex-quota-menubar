@@ -69,7 +69,7 @@ enum QuotaReadResult {
 
 final class LoginItemManager {
     private let fileManager = FileManager.default
-    private let label = "com.plutab.codex-quota-menubar"
+    private let label = "com.bowen.codex-quota-menubar"
 
     var plistURL: URL {
         URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
@@ -815,4 +815,3 @@ let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
-

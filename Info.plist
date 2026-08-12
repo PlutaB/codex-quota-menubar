@@ -8,7 +8,7 @@
   <key>CFBundleExecutable</key>
   <string>CodexQuotaMenuBar</string>
   <key>CFBundleIdentifier</key>
-  <string>com.plutab.codex-quota-menubar</string>
+  <string>com.bowen.codex-quota-menubar</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -16,9 +16,9 @@
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.0</string>
+  <string>3.1.0</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>8</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>
@@ -27,4 +27,3 @@
   <true/>
 </dict>
 </plist>
-
